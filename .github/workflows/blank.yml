@@ -1,0 +1,50 @@
+name: PC Virtual Gratis
+
+on: 
+  workflow_dispatch: # Permite que você ative o PC virtual manualmente pelo botão "Run workflow"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest # Utiliza a máquina Ubuntu gratuita fornecida pelo GitHub
+
+    steps:
+    - name: Atualizar o sistema e instalar a Interface Gráfica
+      run: |
+        sudo apt-get update
+        # Instala um ambiente desktop leve (XFCE4) e o servidor VNC
+        sudo apt-get install -y xfce4 xfce4-goodies tightvncserver expect
+
+    - name: Instalar o Ngrok para conexão remota
+      run: |
+        curl -s https://amazonaws.com | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
+        echo "deb https://amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
+        sudo apt-get update && sudo apt-get install ngrok
+
+    - name: Configurar e Iniciar o Servidor VNC
+      env:
+        VNC_PASSWORD: ${{ secrets.VNC_PASSWORD }} # Senha que você definirá nos Secrets do GitHub
+      run: |
+        mkdir -p ~/.vnc
+        # Script automatizado para definir a senha do VNC sem interação manual
+        expect <<EOF
+        spawn vncpasswd
+        expect "Password:"
+        send "$VNC_PASSWORD\r"
+        expect "Verify:"
+        send "$VNC_PASSWORD\r"
+        expect "Would you like to enter a view-only password (y/n)?"
+        send "n\r"
+        expect eof
+        EOF
+        
+        # Inicia o servidor de tela
+        vncserver :1 -geometry 1280x720 -depth 24
+
+    - name: Conectar ao Ngrok e Expor o PC Virtual
+      env:
+        NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }} # Seu token do site do Ngrok
+      run: |
+        ngrok config add-authtoken $NGROK_AUTH_TOKEN
+        echo "=== Seu PC Virtual está iniciando! Verifique o painel do Ngrok para pegar o link de conexão ==="
+        # Abre o túnel na porta do VNC (5901) e mantém a máquina rodando
+        ngrok tcp 5901
